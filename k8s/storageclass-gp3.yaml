@@ -1,0 +1,15 @@
+# EKS (1.30+) no longer marks any StorageClass as default. This creates an encrypted gp3
+# class backed by the EBS CSI driver (installed by Terraform) and makes it the default.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  encrypted: "true"
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete
+allowVolumeExpansion: true

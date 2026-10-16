@@ -1,0 +1,36 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "stockpile.fullname" . }}
+  labels:
+    {{- include "stockpile.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - http:
+        paths:
+          # /api/* -> Express API (the backend serves its routes under /api, so no rewrite needed)
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "stockpile.backendName" . }}
+                port:
+                  name: http
+          # everything else -> React app
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "stockpile.frontendName" . }}
+                port:
+                  name: http
+      {{- with .Values.ingress.host }}
+      host: {{ . }}
+      {{- end }}
+{{- end }}

@@ -1,0 +1,23 @@
+# Local cluster (kind / minikube / Docker Desktop) using images built on your machine:
+#   docker build -t stockpile-backend:local ./backend
+#   docker build -t stockpile-frontend:local ./frontend
+#   kind load docker-image stockpile-backend:local stockpile-frontend:local --name stockpile
+backend:
+  image:
+    repository: stockpile-backend
+    tag: local
+    pullPolicy: IfNotPresent
+  replicas: 1
+frontend:
+  image:
+    repository: stockpile-frontend
+    tag: local
+    pullPolicy: IfNotPresent
+  replicas: 1
+ingress:
+  enabled: true
+  host: stockpile.local
+hpa:
+  enabled: false
+serviceMonitor:
+  enabled: false

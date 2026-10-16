@@ -1,0 +1,21 @@
+StockPile has been deployed to namespace {{ .Release.Namespace }}.
+
+  kubectl get pods,svc,ingress -n {{ .Release.Namespace }}
+{{- if .Values.ingress.enabled }}
+
+Ingress address:
+  kubectl get ingress {{ include "stockpile.fullname" . }} -n {{ .Release.Namespace }}
+{{- if .Values.ingress.host }}
+  then open http://{{ .Values.ingress.host }}
+{{- else }}
+  then open http://<ADDRESS column>
+{{- end }}
+{{- end }}
+
+Without Ingress:
+  kubectl port-forward svc/{{ include "stockpile.frontendName" . }} 8080:80 -n {{ .Release.Namespace }}
+  open http://localhost:8080
+
+Backend metrics:
+  kubectl port-forward svc/{{ include "stockpile.backendName" . }} 4000:{{ .Values.backend.port }} -n {{ .Release.Namespace }}
+  curl http://localhost:4000/metrics

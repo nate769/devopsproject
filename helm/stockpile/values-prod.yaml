@@ -1,0 +1,25 @@
+# AWS EKS. ArgoCD deploys the chart with this file.
+# The CI pipeline rewrites the two `tag:` fields with the Git commit SHA on every push to main (GitOps).
+backend:
+  image:
+    repository: ghcr.io/shaikh-suja-rahaman/stockpile-backend
+    tag: latest
+  replicas: 2
+frontend:
+  image:
+    repository: ghcr.io/shaikh-suja-rahaman/stockpile-frontend
+    tag: latest
+  replicas: 2
+postgres:
+  storageClass: gp3
+ingress:
+  enabled: true
+  host: ""
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+serviceMonitor:
+  enabled: true
+networkPolicy:
+  enabled: true

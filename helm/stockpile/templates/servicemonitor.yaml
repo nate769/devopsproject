@@ -1,0 +1,20 @@
+{{- if .Values.serviceMonitor.enabled }}
+# Tells the Prometheus Operator (kube-prometheus-stack) to scrape the backend's /metrics.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "stockpile.backendName" . }}
+  labels:
+    {{- include "stockpile.labels" . | nindent 4 }}
+    {{- with .Values.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "stockpile.selectorLabels" (dict "ctx" . "component" "backend") | nindent 6 }}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ .Values.serviceMonitor.interval }}
+{{- end }}

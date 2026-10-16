@@ -1,0 +1,77 @@
+# Default values for the StockPile chart.
+# Environment-specific overrides live in values-dev.yaml (kind/minikube) and values-prod.yaml (EKS).
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Needed only if your GHCR packages are private.
+imagePullSecrets: []
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+backend:
+  image:
+    repository: ghcr.io/shaikh-suja-rahaman/stockpile-backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicas: 2
+  port: 4000
+  seedSampleData: true
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 256Mi }
+
+frontend:
+  image:
+    repository: ghcr.io/shaikh-suja-rahaman/stockpile-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicas: 2
+  port: 8080
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { cpu: 200m, memory: 128Mi }
+
+postgres:
+  image: postgres:16-alpine
+  database: stockpile
+  username: stockpile
+  # Classroom default only. Override at install time:
+  #   --set postgres.password="$(openssl rand -hex 16)"
+  password: change-me-in-prod
+  storage: 2Gi
+  storageClass: ""          # "" = cluster default StorageClass
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+
+ingress:
+  enabled: true
+  className: nginx
+  host: ""                  # "" = match any host (use the load balancer DNS name directly)
+  annotations: {}
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 60
+
+serviceMonitor:
+  enabled: true
+  interval: 15s
+  labels:
+    release: kube-prometheus-stack
+
+# Only the backend may talk to PostgreSQL. Requires a CNI that enforces NetworkPolicy.
+networkPolicy:
+  enabled: false
