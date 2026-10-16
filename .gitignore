@@ -1,0 +1,26 @@
+# Dependencies & builds
+node_modules/
+dist/
+coverage/
+*.log
+
+# Secrets — never commit these
+.env
+.env.*
+!.env.example
+*.pem
+kubeconfig*
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl.bak
+crash.log
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
