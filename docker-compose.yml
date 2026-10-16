@@ -1,0 +1,42 @@
+# Full local stack: PostgreSQL + Express API + React (nginx).
+#   docker compose up --build   ->  http://localhost:3000
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: stockpile
+      POSTGRES_USER: stockpile
+      POSTGRES_PASSWORD: stockpile
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stockpile -d stockpile"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ./backend
+    environment:
+      PORT: "4000"
+      DATABASE_URL: postgres://stockpile:stockpile@postgres:5432/stockpile
+      APP_VERSION: local
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "4000:4000"
+
+  frontend:
+    build: ./frontend
+    environment:
+      BACKEND_URL: http://backend:4000
+    depends_on:
+      - backend
+    ports:
+      - "3000:8080"
+
+volumes:
+  postgres-data:
