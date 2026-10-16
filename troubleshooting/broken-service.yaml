@@ -1,0 +1,12 @@
+# Lab 2: selector that matches no pods -> Service with zero endpoints
+apiVersion: v1
+kind: Service
+metadata:
+  name: broken-service
+  namespace: stockpile
+spec:
+  selector:
+    app.kubernetes.io/component: api     # real pods are labelled component=backend
+  ports:
+    - port: 4000
+      targetPort: 4000

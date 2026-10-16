@@ -1,0 +1,32 @@
+# Replace TAG with a real backend image before applying.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: broken-readiness
+  namespace: stockpile
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: broken-readiness }
+  template:
+    metadata:
+      labels: { app: broken-readiness }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: backend
+          image: ghcr.io/shaikh-suja-rahaman/stockpile-backend:TAG
+          env:
+            - { name: RUN_MIGRATIONS, value: "false" }
+            - { name: SEED_SAMPLE_DATA, value: "false" }
+          ports:
+            - containerPort: 4000
+          readinessProbe:
+            httpGet: { path: /healthcheck, port: 4000 }   # app exposes /health and /ready
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }

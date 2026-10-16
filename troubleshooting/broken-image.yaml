@@ -1,0 +1,24 @@
+# Lab 1: image tag that does not exist -> ImagePullBackOff
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: broken-image
+  namespace: stockpile
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: broken-image }
+  template:
+    metadata:
+      labels: { app: broken-image }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: backend
+          image: ghcr.io/example/stockpile-backend:does-not-exist
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
