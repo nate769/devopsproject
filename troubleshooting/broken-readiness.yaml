@@ -18,7 +18,7 @@ spec:
         seccompProfile: { type: RuntimeDefault }
       containers:
         - name: backend
-          image: ghcr.io/shaikh-suja-rahaman/stockpile-backend:TAG
+          image: ghcr.io/shaikh-suja-rahaman/stockpile-backend:01b4056c91f72d9a9a608bb133af739be58781b8
           env:
             - { name: RUN_MIGRATIONS, value: "false" }
             - { name: SEED_SAMPLE_DATA, value: "false" }

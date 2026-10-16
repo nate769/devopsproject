@@ -8,7 +8,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/shaikh-suja-rahaman/stockpile.git
+    repoURL: https://github.com/Shaikh-Suja-Rahaman/stockpile-DevOps-Project.git
     targetRevision: main
     path: helm/stockpile
     helm:

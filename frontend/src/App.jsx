@@ -68,7 +68,7 @@ export default function App() {
           <span className="logo">📦</span>
           <div>
             <h1>StockPile</h1>
-            <p>Inventory at a glance</p>
+            <p className="header-subtitle">Inventory at a glance · v2</p>
           </div>
         </div>
         <button className="btn primary" onClick={() => setEditing({})}>+ Add item</button>
