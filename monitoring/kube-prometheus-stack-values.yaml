@@ -1,0 +1,25 @@
+# helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+#   -n monitoring --create-namespace -f monitoring/kube-prometheus-stack-values.yaml
+prometheus:
+  prometheusSpec:
+    # Pick up ServiceMonitors from every namespace, not only ones labelled for this Helm release.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorNamespaceSelector: {}
+    podMonitorSelectorNilUsesHelmValues: false
+    retention: 2d
+    resources:
+      requests: { cpu: 200m, memory: 512Mi }
+
+grafana:
+  enabled: true
+  # Override on the command line instead of committing a real password:
+  #   --set grafana.adminPassword="$(openssl rand -hex 12)"
+  adminPassword: admin
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard   # ConfigMaps with this label are loaded as dashboards
+      searchNamespace: ALL
+
+alertmanager:
+  enabled: false   # not needed for this project; saves cluster resources

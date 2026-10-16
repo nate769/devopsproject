@@ -1,0 +1,299 @@
+# Grafana dashboard, auto-loaded by the Grafana sidecar (label grafana_dashboard: "1").
+#   kubectl apply -f monitoring/grafana-dashboard.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stockpile-grafana-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  stockpile-api.json: |
+    {
+      "uid": "stockpile-api",
+      "title": "StockPile API",
+      "tags": [
+        "stockpile"
+      ],
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "refresh": "10s",
+      "time": {
+        "from": "now-30m",
+        "to": "now"
+      },
+      "templating": {
+        "list": [
+          {
+            "name": "datasource",
+            "type": "datasource",
+            "query": "prometheus",
+            "current": {}
+          }
+        ]
+      },
+      "panels": [
+        {
+          "id": 1,
+          "title": "Requests per second",
+          "type": "stat",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 0,
+            "w": 6,
+            "h": 5
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum(rate(http_requests_total{app=\"stockpile-backend\"}[1m]))",
+              "legendFormat": ""
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "title": "Error rate (5xx)",
+          "type": "stat",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 6,
+            "y": 0,
+            "w": 6,
+            "h": 5
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum(rate(http_requests_total{app=\"stockpile-backend\",status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_requests_total{app=\"stockpile-backend\"}[5m])), 1e-9)",
+              "legendFormat": ""
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "title": "p95 latency",
+          "type": "stat",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 0,
+            "w": 6,
+            "h": 5
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"stockpile-backend\"}[5m])))",
+              "legendFormat": ""
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "title": "Low-stock items",
+          "type": "stat",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 18,
+            "y": 0,
+            "w": 6,
+            "h": 5
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "max(stockpile_low_stock_items)",
+              "legendFormat": ""
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "title": "Requests by route",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 5,
+            "w": 12,
+            "h": 9
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (route) (rate(http_requests_total{app=\"stockpile-backend\"}[1m]))",
+              "legendFormat": "{{route}}"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "title": "Latency p50 / p95 / p99",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 5,
+            "w": 12,
+            "h": 9
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"stockpile-backend\"}[5m])))",
+              "legendFormat": "p50"
+            },
+            {
+              "refId": "B",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"stockpile-backend\"}[5m])))",
+              "legendFormat": "p95"
+            },
+            {
+              "refId": "C",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"stockpile-backend\"}[5m])))",
+              "legendFormat": "p99"
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "title": "Requests by status code",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 14,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (status_code) (rate(http_requests_total{app=\"stockpile-backend\"}[1m]))",
+              "legendFormat": "{{status_code}}"
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "title": "Backend pods (HPA)",
+          "type": "stat",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 14,
+            "w": 6,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "count(up{job=~\".*stockpile-backend.*\"} == 1)",
+              "legendFormat": ""
+            }
+          ]
+        },
+        {
+          "id": 9,
+          "title": "Backend CPU (cores)",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 18,
+            "y": 14,
+            "w": 6,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (pod) (rate(process_cpu_seconds_total{app=\"stockpile-backend\"}[1m]))",
+              "legendFormat": "{{pod}}"
+            }
+          ]
+        }
+      ]
+    }
