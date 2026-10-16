@@ -1,0 +1,33 @@
+# GitOps: ArgoCD watches this repo and keeps the cluster in sync with helm/stockpile + values-prod.yaml.
+# CI never touches the cluster — it only commits a new image tag, and ArgoCD rolls it out.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stockpile
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/shaikh-suja-rahaman/stockpile.git
+    targetRevision: main
+    path: helm/stockpile
+    helm:
+      releaseName: stockpile
+      valueFiles:
+        - values-prod.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: stockpile
+  syncPolicy:
+    automated:
+      prune: true      # delete resources removed from Git
+      selfHeal: true   # revert manual kubectl edits back to what Git says
+    syncOptions:
+      - CreateNamespace=true
+  # The HPA owns the backend replica count, so ignore drift on that field.
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      name: stockpile-backend
+      jsonPointers:
+        - /spec/replicas
