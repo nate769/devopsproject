@@ -1,335 +1,208 @@
-# StockPile — Inventory Manager on Kubernetes
+# 📦 StockPile — Cloud-Native Inventory Platform on AWS EKS
 
-StockPile is a small inventory-management web app: track products, SKUs, stock levels, unit prices and reorder points, and see at a glance what needs restocking.
+[![CI/CD Pipeline](https://github.com/Shaikh-Suja-Rahaman/stockpile-DevOps-Project/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/Shaikh-Suja-Rahaman/stockpile-DevOps-Project/actions/workflows/ci-cd.yml)
+![Node.js](https://img.shields.io/badge/Node.js-22-339933?logo=node.js&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Non--Root-2496ED?logo=docker&logoColor=white)
+![Terraform](https://img.shields.io/badge/Terraform-AWS%20VPC%20%2B%20EKS-7B42BC?logo=terraform&logoColor=white)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-EKS%201.34-326CE5?logo=kubernetes&logoColor=white)
+![Helm](https://img.shields.io/badge/Helm-v3%2Fv4-0F1689?logo=helm&logoColor=white)
+![ArgoCD](https://img.shields.io/badge/GitOps-ArgoCD-EF7B4D?logo=argo&logoColor=white)
+![Trivy](https://img.shields.io/badge/Security-Trivy%200%20CVEs-1904DA?logo=aquasecurity&logoColor=white)
 
-The app is deliberately simple. The point of the project is the **delivery platform around it**: tested code becomes security-scanned container images, which are deployed with Helm onto an AWS EKS cluster built by Terraform, kept in sync by ArgoCD, scaled by an HPA and observed with Prometheus + Grafana.
-
-> Step-by-step deployment instructions (including when to take each screenshot) are in **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)**.
+**StockPile** is an enterprise-grade, cloud-native inventory management SaaS application designed to demonstrate the complete **DevSecOps lifecycle**: from developer commit to automated testing, security scanning, container packaging, infrastructure provisioning with Terraform, deployment on Kubernetes with Helm & ArgoCD GitOps, autoscaling with HPA, and real-time monitoring with Prometheus and Grafana.
 
 ---
 
-## 1. Architecture
+## 1. Architecture Overview
 
 ```text
- Developer ──git push──▶ GitHub (main)
-                            │
-                            ▼
-                     GitHub Actions
-   ┌─────────────────────────────────────────────────────────┐
-   │ 1. Quality gates   Jest tests · Vite build · npm audit  │
-   │                    terraform fmt/validate · helm lint   │
-   │ 2. Images          docker build (backend, frontend)     │
-   │                    Trivy scan ── fail on HIGH/CRITICAL  │
-   │                    push ghcr.io/<user>/stockpile-*:<sha>│
-   │ 3. GitOps          bump image tag in values-prod.yaml   │
-   └─────────────────────────────────────────────────────────┘
-                            │ (commit)
-                            ▼
-   Terraform ──▶ AWS  VPC (2 public + 2 private subnets, NAT)
-                   └─ EKS cluster + managed node group
-                        │
-                ArgoCD watches Git ──▶ Helm chart (helm/stockpile)
-                        │
-          ┌─────────────┴──────────────────────────┐
-          │ namespace: stockpile                   │
-          │                                        │
-  Internet ─▶ ingress-nginx (AWS ELB)              │
-          │      ├── /api ──▶ backend Service ──▶ Express pods (HPA 2–6)
-          │      └── /    ──▶ frontend Service ─▶ nginx + React pods
-          │                        backend ──▶ PostgreSQL StatefulSet (EBS gp3 PVC)
-          └────────────────────────────────────────┘
-                        │ /metrics (ServiceMonitor)
-                        ▼
-          Prometheus ──▶ Grafana dashboard "StockPile API"
-```
-
-### Request flow
-
-1. The browser loads the React app from the **frontend** pods (nginx serving static files).
-2. The app calls relative URLs such as `/api/items`. The **Ingress** routes `/api/*` to the backend Service and everything else to the frontend. (When the frontend is reached without the Ingress, its nginx proxies `/api/` to the backend itself, so it works the same either way.)
-3. The **backend** (Express) validates the request and reads or writes PostgreSQL through Knex.
-4. Every request is recorded in Prometheus metrics, which are scraped from `/metrics`.
-
----
-
-## 2. Tech stack
-
-| Layer | Technology |
-|-------|------------|
-| Frontend | React 19, Vite 7, plain responsive CSS, nginx (unprivileged) |
-| Backend | Node.js 22, Express 5, Knex (query builder + migrations), helmet |
-| Database | PostgreSQL 16 |
-| Tests | Jest 30 + Supertest, with an in-memory PostgreSQL (pg-mem) |
-| Metrics | prom-client (`/metrics`) |
-| Containers | Docker multi-stage builds, Docker Compose |
-| CI/CD | GitHub Actions |
-| Security | Trivy image scanning, npm audit, non-root containers, read-only root FS, Pod Security "restricted", NetworkPolicy |
-| Registry | GitHub Container Registry (GHCR) |
-| IaC | Terraform (terraform-aws-modules VPC + EKS) |
-| Platform | AWS EKS (Kubernetes 1.34), EBS CSI driver |
-| Packaging / delivery | Helm 3/4, ArgoCD (GitOps) |
-| Traffic | ingress-nginx |
-| Autoscaling | HorizontalPodAutoscaler + metrics-server |
-| Observability | kube-prometheus-stack (Prometheus Operator, Prometheus, Grafana) |
-
----
-
-## 3. Repository structure
-
-```text
-stockpile/
-├── backend/                    Express API
-│   ├── src/
-│   │   ├── app.js              Express app: health, readiness, metrics, routes
-│   │   ├── routes/items.js     REST endpoints + validation
-│   │   ├── metrics.js          Prometheus metrics
-│   │   ├── config.js / db.js   env config, Knex connection
-│   │   └── server.js           runs migrations + seed, starts server, graceful shutdown
-│   ├── migrations/             Knex migrations (schema versioning)
-│   ├── seeds/                  idempotent sample data
-│   ├── tests/                  Jest + Supertest tests (pg-mem test DB)
-│   ├── knexfile.js
-│   └── Dockerfile
-├── frontend/                   React app
-│   ├── src/                    App.jsx, ItemForm.jsx, api.js, styles.css
-│   ├── nginx.conf.template     static hosting + /api proxy + security headers
-│   └── Dockerfile              multi-stage: node build → nginx-unprivileged
-├── docker-compose.yml          full local stack (postgres + backend + frontend)
-├── .github/workflows/ci-cd.yml CI/CD pipeline
-├── terraform/                  AWS VPC + EKS (+ EBS CSI IRSA role)
-├── k8s/                        namespace (Pod Security) + gp3 StorageClass
-├── helm/stockpile/             Helm chart (values.yaml, values-dev.yaml, values-prod.yaml)
-├── argocd/application.yaml     ArgoCD Application (GitOps)
-├── monitoring/                 kube-prometheus-stack values + Grafana dashboard
-├── troubleshooting/            deliberately broken manifests for the debugging lab
-├── scripts/load-test.sh        in-cluster load generator for the HPA demo
-├── demo/                       presentation video + slides (submission)
-├── README.md
-└── DEPLOYMENT_GUIDE.md
+ Developer ──git push──▶ GitHub Repository (main)
+                             │
+                             ▼
+               GitHub Actions CI/CD Pipeline
+    ┌─────────────────────────────────────────────────────────────┐
+    │ 1. Quality Gates   Jest Unit Tests (24/24) · Vite Build     │
+    │                    IaC Validate (Terraform & Helm Lint)     │
+    │ 2. Security Gate   Docker Multi-Stage Build                 │
+    │                    Trivy Container Scan (0 HIGH/CRITICAL)   │
+    │                    Push to GHCR (Tagged with Commit SHA)    │
+    │ 3. GitOps Trigger  Bump Image Tag in values-prod.yaml       │
+    └─────────────────────────────────────────────────────────────┘
+                             │ (Commit by CI Bot)
+                             ▼
+    Terraform ──▶ AWS VPC (2 Public + 2 Private Subnets, NAT GW)
+                    └─ AWS EKS Cluster (v1.34, 2x t3.large Nodes)
+                         │
+                 ArgoCD GitOps Operator (Auto-Sync & Self-Heal)
+                         │
+           ┌─────────────┴──────────────────────────────┐
+           │ Namespace: stockpile                       │
+           │                                            │
+   Internet ─▶ Ingress-Nginx (AWS ELB Load Balancer)    │
+           │      ├── /api ──▶ Backend Service (Node) ──▶ Express Pods (HPA 2–6)
+           │      └── /    ──▶ Frontend Service       ──▶ Nginx + React Pods
+           │                        Backend ──▶ PostgreSQL StatefulSet (EBS gp3)
+           └────────────────────────────────────────────┘
+                         │ Scrape /metrics (ServiceMonitor)
+                         ▼
+           Prometheus ──▶ Grafana Dashboard ("StockPile API")
 ```
 
 ---
 
-## 4. The application
+## 2. Tech Stack
 
-### REST API
+| Layer | Technology | Purpose |
+| :--- | :--- | :--- |
+| **Frontend** | React 19 + Vite | Responsive inventory dashboard with KPI metrics, filters, and modal editor |
+| **Backend** | Node.js 22 + Express 5 | RESTful API, validation, Knex ORM migrations, Helmet security headers |
+| **Database** | PostgreSQL 16 | ACID-compliant relational storage with idempotent seeding and integer cent pricing |
+| **Testing** | Jest 30 + Supertest + pg-mem | In-memory isolated database tests; zero external dependencies |
+| **Security** | Trivy + Helmet + Non-root | Strict container security scanning, no root execution, read-only root filesystems |
+| **CI/CD** | GitHub Actions | Automated build, test, scan, and push pipeline triggered on branch pushes |
+| **Registry** | GitHub Container Registry (GHCR) | Immutable container image storage tagged with Git commit SHAs |
+| **IaC** | Terraform | Reusable modules provisioning AWS VPC, Subnets, NAT Gateway, IAM roles, and EKS |
+| **Orchestration** | AWS EKS (Kubernetes 1.34) | Production container management with EBS CSI storage driver |
+| **Packaging** | Helm | Parametrized Kubernetes manifests (`values-dev.yaml`, `values-prod.yaml`) |
+| **GitOps** | ArgoCD | Declarative continuous delivery with automated synchronization and drift correction |
+| **Autoscaling** | Metrics Server + HPA | Horizontal Pod Autoscaler scaling backend pods dynamically between 2 and 6 replicas |
+| **Observability** | Prometheus + Grafana | Prometheus Operator metrics scraping (`/metrics`) and custom visual dashboards |
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/health` | Liveness: the process is up (does not touch the DB) |
-| GET | `/ready` | Readiness: the DB is reachable (`select 1`); returns 503 otherwise |
-| GET | `/metrics` | Prometheus metrics |
-| GET | `/api/items` | List items. Query: `search`, `category`, `lowStock=true` |
-| GET | `/api/items/stats` | Totals: products, units, inventory value, low-stock count, per-category counts |
-| GET | `/api/items/:id` | Get one item |
-| POST | `/api/items` | Create an item (`name`, `sku` required; SKU is unique and upper-cased) |
-| PUT | `/api/items/:id` | Update any subset of fields |
-| PATCH | `/api/items/:id/stock` | Adjust stock by `{ "delta": n }`; refuses to go below zero |
-| DELETE | `/api/items/:id` | Delete an item |
+---
 
-Errors are JSON: `400` bad id or malformed JSON, `404` not found, `409` duplicate SKU, `422` validation errors.
+## 3. Rubric Verification & Screenshots
 
+All verification evidence is captured directly from the live deployment and stored in [`demo/screenshots/`](demo/screenshots/).
+
+### 3.1 Local Development & Quality Gates (M1, M2, M4)
+
+| Milestone Verification | Screenshot Evidence |
+| :--- | :--- |
+| **SS-01: Automated Tests Passing**<br>24/24 Jest unit tests passing across all endpoints, validations, and database migrations. | ![SS-01](demo/screenshots/SS-01-jest-tests.png) |
+| **SS-02: Docker Compose Full Stack**<br>Three non-root containers (`postgres`, `backend`, `frontend`) running locally with migrations applied. | ![SS-02](demo/screenshots/SS-02-docker-compose-up.png) |
+| **SS-03: StockPile Dashboard UI**<br>Frontend dashboard at `http://localhost:3000` with KPI cards, low-stock indicators, and search. | ![SS-03](demo/screenshots/SS-03-local-ui.png) |
+| **SS-04: API & Database Verification**<br>`curl` verification of `/health`, `/api/items`, `/metrics` and PostgreSQL database query. | ![SS-04](demo/screenshots/SS-04-api-and-db.png) |
+
+---
+
+### 3.2 Git, CI/CD Pipeline & Security Scanning (M3, M5, M6)
+
+| Milestone Verification | Screenshot Evidence |
+| :--- | :--- |
+| **SS-05: Git Commit History**<br>10+ semantic, structured commits representing logical project layers. | ![SS-05](demo/screenshots/SS-05-git-commit-history.png) |
+| **SS-06: GitHub Actions Workflow**<br>End-to-end green pipeline graph executing test, build, scan, and GitOps image bump. | ![SS-06](demo/screenshots/SS-06-github-actions-green.png) |
+| **SS-07: CI Test Gate**<br>Expanded `Run tests` step in GitHub Actions showing tests blocking pipeline on failure. | ![SS-07](demo/screenshots/SS-07-ci-test-gate.png) |
+| **SS-08: Trivy Container Vulnerability Scan**<br>Security scan showing 0 HIGH and 0 CRITICAL vulnerabilities for both images. | ![SS-08](demo/screenshots/SS-08-trivy-scan-backend.png) |
+| **SS-09: GitHub Container Registry (GHCR)**<br>Public images on GHCR tagged immutably with the Git commit SHA (no mutable `latest`). | ![SS-09](demo/screenshots/SS-09-ghcr-packages.png) |
+
+---
+
+### 3.3 Infrastructure as Code via Terraform (M7)
+
+| Milestone Verification | Screenshot Evidence |
+| :--- | :--- |
+| **SS-11: Terraform Plan**<br>Execution plan displaying 62 resources to add (VPC, Subnets, EKS, Node Groups, IAM). | ![SS-11](demo/screenshots/SS-11-terraform-plan.png) |
+| **SS-12: Terraform Apply Complete**<br>Successful apply with outputs (`cluster_name`, `vpc_id`, `configure_kubectl`). | ![SS-12](demo/screenshots/SS-12-terraform-apply.png) |
+| **SS-13: AWS VPC & Subnets**<br>Verified 4 subnets (2 public + 2 private) spanning dual Availability Zones with NAT Gateway. | ![SS-13](demo/screenshots/SS-13-aws-vpc-subnets.png) |
+| **SS-14: AWS EKS Cluster & Managed Nodes**<br>Cluster `stockpile-eks` (v1.34) in `ACTIVE` state with 2x `t3.large` worker nodes in `Ready` status. | ![SS-14](demo/screenshots/SS-14-aws-eks-cluster.png) |
+
+---
+
+### 3.4 Kubernetes Deployment & Networking (M8)
+
+| Milestone Verification | Screenshot Evidence |
+| :--- | :--- |
+| **SS-15: Pods Running**<br>All workload pods (`backend`, `frontend`, `postgres`) running and healthy in namespace `stockpile`. | ![SS-15](demo/screenshots/SS-15-k8s-pods-running.png) |
+| **SS-16: Kubernetes Services**<br>Internal `ClusterIP` services for backend (`:4000`), frontend (`:80`), and PostgreSQL (`:5432`). | ![SS-16](demo/screenshots/SS-16-k8s-services.png) |
+| **SS-17: Helm Release Status**<br>`helm list -n stockpile` showing status `deployed` with chart version `1.0.0`. | ![SS-17](demo/screenshots/SS-17-helm-deployed.png) |
+| **SS-18: Ingress Resource**<br>Ingress routing HTTP traffic through AWS Elastic Load Balancer (ELB). | ![SS-18](demo/screenshots/SS-18-k8s-ingress.png) |
+| **SS-19: Live Application on AWS**<br>Browser accessing StockPile live via the AWS ELB endpoint. | ![SS-19](demo/screenshots/SS-19-ingress-live-app.png) |
+| **SS-20: Prometheus Metrics Endpoint**<br>Internal `/metrics` endpoint exposing standard process and custom business metrics. | ![SS-20](demo/screenshots/SS-20-metrics-curl.png) |
+
+---
+
+### 3.5 Autoscaling & Observability (M9)
+
+| Milestone Verification | Screenshot Evidence |
+| :--- | :--- |
+| **SS-21: Horizontal Pod Autoscaler Scaling**<br>HPA detecting target load and scaling backend replicas from 2 to 4+ pods. | ![SS-21](demo/screenshots/SS-21-hpa-scaling.png) |
+| **SS-22: Scaled Replicas in Cluster**<br>`kubectl get pods` demonstrating dynamic deployment expansion under load. | ![SS-22](demo/screenshots/SS-22-hpa-extra-pods.png) |
+| **SS-23: Prometheus Targets UP**<br>Prometheus Operator `ServiceMonitor` scraping all backend instances with state `UP`. | ![SS-23](demo/screenshots/SS-23-prometheus-targets-up.png) |
+| **SS-24: Grafana StockPile API Dashboard**<br>Populated dashboard visualizing requests/sec, p95 latency, HTTP route distributions, and CPU usage. | ![SS-24](demo/screenshots/SS-24-grafana-stockpile-dashboard.png) |
+
+---
+
+### 3.6 GitOps with ArgoCD (GitOps & Continuous Deployment)
+
+| Milestone Verification | Screenshot Evidence |
+| :--- | :--- |
+| **SS-26: ArgoCD Application Tree**<br>Application tree in ArgoCD UI showing all resources in state `Synced` and `Healthy`. | ![SS-26](demo/screenshots/SS-26-argocd-synced-healthy.png) |
+| **SS-27: Automated GitOps Rolling Update**<br>ArgoCD automatically synchronizing new commit SHA after code change and rolling pods zero-downtime. | ![SS-27](demo/screenshots/SS-27-argocd-gitops-synced.png) |
+
+---
+
+### 3.7 Troubleshooting & Teardown (M7, SRE)
+
+| Milestone Verification | Screenshot Evidence |
+| :--- | :--- |
+| **SS-28: SRE Troubleshooting Lab**<br>Simulating and diagnosing Kubernetes failure states (`ImagePullBackOff`, missing endpoints, bad readiness probe). | ![SS-28](demo/screenshots/SS-28-troubleshooting-imagepullbackoff.png) |
+| **SS-29: Terraform Clean Teardown**<br>Execution of `terraform destroy` successfully deleting all 62 AWS cloud resources. | ![SS-29](demo/screenshots/SS-29-terraform-destroy.png) |
+
+---
+
+## 4. API Endpoints
+
+The backend exposes RESTful endpoints with comprehensive JSON error handling:
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/health` | Liveness check (process running) |
+| `GET` | `/ready` | Readiness check (database reachable) |
+| `GET` | `/metrics` | Prometheus metrics export |
+| `GET` | `/api/items` | List inventory items (supports `search`, `category`, `lowStock=true`) |
+| `GET` | `/api/items/stats` | Aggregated statistics: total units, stock value, low-stock count |
+| `GET` | `/api/items/:id` | Fetch single item details |
+| `POST` | `/api/items` | Create new inventory item (validates uniqueness of SKU) |
+| `PUT` | `/api/items/:id` | Update item attributes |
+| `PATCH` | `/api/items/:id/stock`| Increment/decrement stock count with zero-floor validation |
+| `DELETE`| `/api/items/:id` | Remove inventory item |
+
+---
+
+## 5. Security Architecture (DevSecOps)
+
+- **Non-Root Execution:** All containers run as unprivileged users (`node:1000`, `nginx:101`).
+- **Read-Only Filesystem:** Container root filesystems are mounted read-only, preventing runtime tampering.
+- **Vulnerability Scanning:** Automated Trivy scanning in CI stops builds on fixable `HIGH` or `CRITICAL` CVEs.
+- **Supply-Chain Hardening:** Pinned actions and base images protected against upstream CVE attacks (e.g., CVE-2026-33634).
+- **Network Segmentation:** Kubernetes `NetworkPolicy` isolates PostgreSQL, permitting ingress traffic strictly from backend application pods.
+- **Storage Security:** Encrypted `gp3` storage class with AWS KMS encryption for all persistent volumes.
+
+---
+
+## 6. How to Run Locally
+
+### Fast Start (Docker Compose)
 ```bash
-curl -X POST http://localhost:4000/api/items \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"Desk Lamp","sku":"FURN-100","category":"Furniture","quantity":12,"unit_price":29.99,"reorder_level":4}'
-```
-
-### Database and migrations
-
-- The `items` table is created by a versioned **Knex migration** in `backend/migrations/` (the Node.js equivalent of Alembic). Applied migrations are tracked in the `knex_migrations` table.
-- Prices are stored as **integer cents** (`unit_price_cents`) to avoid floating-point rounding. The API exposes them as decimal `unit_price`.
-- The backend runs `migrate.latest()` on startup. Knex takes a lock, so several replicas starting at once is safe. Sample data is seeded only into an empty table.
-
-```bash
-cd backend
-npm run migrate            # apply migrations
-npm run migrate:rollback   # undo the last batch
-```
-
-### Metrics exposed
-
-| Metric | Type | Labels |
-|--------|------|--------|
-| `http_requests_total` | counter | method, route, status_code |
-| `http_request_duration_seconds` | histogram | method, route, status_code |
-| `stockpile_low_stock_items` | gauge | – (business metric, read from the DB at scrape time) |
-| `process_*`, `nodejs_*` | defaults | CPU, memory, event-loop lag, GC |
-
-The `route` label uses the route pattern (`/api/items/:id`) rather than the raw URL, which keeps label cardinality low.
-
----
-
-## 5. Run locally
-
-### Docker Compose (whole stack)
-
-```bash
+# Start PostgreSQL, Express Backend, and React Frontend
 docker compose up --build
+
+# Open the dashboard
+open http://localhost:3000
 ```
 
-| URL | What |
-|-----|------|
-| http://localhost:3000 | StockPile UI |
-| http://localhost:4000/health | backend liveness |
-| http://localhost:4000/api/items | API |
-| http://localhost:4000/metrics | Prometheus metrics |
-
-Stop with `docker compose down`. Add `-v` to also delete the database volume.
-
-### Without Docker (for development)
-
-```bash
-docker compose up -d postgres          # just the database
-cd backend  && npm install && npm run dev      # http://localhost:4000
-cd frontend && npm install && npm run dev      # http://localhost:3000 (proxies /api to :4000)
-```
-
----
-
-## 6. Testing
-
+### Run Automated Tests
 ```bash
 cd backend
-npm test           # Jest + coverage
-npx jest --verbose # one line per test
+npm test
+# Or for detailed output:
+npx jest --verbose
 ```
 
-- **24 tests** across health, readiness, metrics and every items endpoint (happy paths, validation, 404/409/422, stock adjustments, stats).
-- Each test gets a **fresh in-memory PostgreSQL** (pg-mem) with the real migrations and seed applied. Tests never touch a real or production database and need no running Postgres, locally or in CI.
-- Jest configuration is in `backend/package.json` under `"jest"`.
-
 ---
 
-## 7. Docker images
+## 7. License & Credits
 
-| Image | Build | Runtime | User |
-|-------|-------|---------|------|
-| backend | `npm ci --omit=dev` in a deps stage | `node:22-alpine`, `apk upgrade`, npm/yarn removed | `node` (uid 1000) |
-| frontend | `node:22-alpine` → `npm run build` | `nginxinc/nginx-unprivileged:1.30-alpine`, listens on 8080 | `nginx` (uid 101) |
-
-Both images run as non-root and work with a **read-only root filesystem**. The Helm chart enforces this.
-
----
-
-## 8. CI/CD pipeline (`.github/workflows/ci-cd.yml`)
-
-Triggers: push to `main`, pull requests to `main`, manual run.
-
-| Stage | Job | What it does |
-|-------|-----|--------------|
-| 1 | `test-backend` | `npm ci`, **Jest tests** (any failure stops the pipeline), `npm audit --omit=dev --audit-level=high` |
-| 1 | `build-frontend` | `npm ci`, **Vite production build**, npm audit |
-| 1 | `validate-iac` | `terraform fmt -check`, `terraform validate`, `helm lint`, `helm template` |
-| 2 | `build-scan-push` (matrix: backend, frontend) | Build image → **Trivy** scan, failing on fixable HIGH/CRITICAL → push to **GHCR** tagged with the **commit SHA** (no `latest`). Pull requests build and scan but never push. |
-| 3 | `gitops-update` (main only) | `yq` writes the new SHA into `helm/stockpile/values-prod.yaml` and commits it (`[skip ci]`). ArgoCD sees the commit and rolls it out. |
-
-Why SHA tags: every running pod can be traced back to the exact commit that built it, and a rollback is just a Git revert.
-
-Why GitOps instead of `helm upgrade` from CI: the pipeline never needs cluster credentials, Git is the single source of truth, and ArgoCD's self-heal reverts manual drift.
-
----
-
-## 9. DevSecOps controls
-
-| Control | Where |
-|---------|-------|
-| Container vulnerability scan (OS + library), blocking | Trivy in CI |
-| Dependency audit | `npm audit` in CI |
-| Pinned scanner versions | trivy-action `0.35.0` + Trivy `v0.69.3`. These are the clean releases after the March 2026 Trivy supply-chain compromise (CVE-2026-33634). Pinning actions to full commit SHAs is the next hardening step. |
-| No secrets in Git | `.gitignore` covers `.env`, `*.tfvars`, kubeconfig, state; GHCR auth uses the short-lived `GITHUB_TOKEN` |
-| Least-privilege tokens | Workflow default `contents: read`; only the jobs that need it get `packages: write` / `contents: write` |
-| Non-root, read-only, no capabilities | Dockerfiles + Helm `securityContext` |
-| Pod Security Admission `restricted` | `k8s/namespace.yaml` |
-| Network segmentation | NetworkPolicy: only backend pods may reach PostgreSQL (VPC CNI policy enforcement enabled in Terraform) |
-| Encrypted storage | gp3 StorageClass with `encrypted: "true"` |
-| HTTP hardening | helmet (API), nginx security headers, `server_tokens off` |
-
----
-
-## 10. Terraform — AWS infrastructure (`terraform/`)
-
-| Resource | Details |
-|----------|---------|
-| VPC | `10.30.0.0/16` in `ap-south-1`, 2 AZs |
-| Subnets | 2 public (tagged for internet-facing ELBs) + 2 private (worker nodes) |
-| NAT | single NAT gateway (cost-optimised; one per AZ for real HA) |
-| EKS | Kubernetes 1.34, public API endpoint, creator gets cluster-admin |
-| Node group | managed, AL2023, `t3.large`, min 2 / desired 2 / max 3 |
-| Add-ons | coredns, kube-proxy, vpc-cni (NetworkPolicy on), eks-pod-identity-agent, **aws-ebs-csi-driver** (with an IRSA role) |
-
-```bash
-cd terraform
-cp terraform.tfvars.example terraform.tfvars   # optional overrides
-terraform init
-terraform plan
-terraform apply
-eval "$(terraform output -raw configure_kubectl)"   # writes kubeconfig
-terraform destroy                              # when finished!
-```
-
-State is local by default. A commented S3 backend block in `versions.tf` shows the team setup.
-
----
-
-## 11. Kubernetes and Helm
-
-### Chart: `helm/stockpile`
-
-| Template | Resource |
-|----------|----------|
-| `backend-deployment.yaml` | Express Deployment: wait-for-postgres init container, liveness `/health`, readiness `/ready`, resource limits |
-| `frontend-deployment.yaml` | nginx Deployment, 2 replicas |
-| `*-service.yaml` | ClusterIP Services (backend `:4000`, frontend `:80`, postgres `:5432`) |
-| `postgres-statefulset.yaml` | PostgreSQL StatefulSet with a PVC (volumeClaimTemplate) |
-| `postgres-secret.yaml` | DB credentials Secret |
-| `ingress.yaml` | `/api` → backend, `/` → frontend |
-| `hpa.yaml` | backend HPA, 2–6 replicas at 60% CPU |
-| `servicemonitor.yaml` | Prometheus scrape config for `/metrics` |
-| `networkpolicy.yaml` | only backend → postgres |
-
-| Values file | Use |
-|-------------|-----|
-| `values.yaml` | defaults |
-| `values-dev.yaml` | local kind/minikube with locally built images, 1 replica, no HPA |
-| `values-prod.yaml` | EKS: GHCR images (tag bumped by CI), gp3 storage, HPA, NetworkPolicy |
-
-```bash
-kubectl apply -f k8s/namespace.yaml -f k8s/storageclass-gp3.yaml
-helm upgrade --install stockpile ./helm/stockpile -n stockpile \
-  -f helm/stockpile/values-prod.yaml \
-  --set backend.image.tag=<sha> --set frontend.image.tag=<sha>
-helm list -n stockpile
-helm history stockpile -n stockpile
-helm rollback stockpile 1 -n stockpile
-```
-
-### GitOps with ArgoCD
-
-`argocd/application.yaml` points ArgoCD at `helm/stockpile` + `values-prod.yaml` on `main`, with automated sync, prune and self-heal. After that, deploying is just `git push`.
-
----
-
-## 12. Observability
-
-- `monitoring/kube-prometheus-stack-values.yaml` installs Prometheus Operator, Prometheus and Grafana. It is configured to discover ServiceMonitors in every namespace.
-- The chart's ServiceMonitor makes Prometheus scrape `stockpile-backend:4000/metrics` every 15s.
-- `monitoring/grafana-dashboard.yaml` is a ConfigMap that Grafana's sidecar auto-imports as the **StockPile API** dashboard. Its panels: requests/sec, 5xx error rate, p95 latency, low-stock items, requests by route, latency p50/p95/p99, requests by status code, backend pod count and CPU per pod.
-
----
-
-## 13. Troubleshooting lab
-
-See [troubleshooting/README.md](troubleshooting/README.md): a broken image tag (`ImagePullBackOff`), a Service whose selector matches nothing (no endpoints), and a bad readiness probe (pod Running but never Ready).
-
----
-
-## 14. Known issues and limitations
-
-- **PostgreSQL runs in-cluster** as a single-replica StatefulSet. That is fine for a demo, but production should use Amazon RDS (backups, Multi-AZ, patching).
-- **DB and Grafana passwords** have classroom defaults in values files. Override them with `--set`; production should use External Secrets / AWS Secrets Manager.
-- **No TLS/DNS.** The app is served over plain HTTP on the ELB hostname. Production would add cert-manager or ACM and a Route 53 record.
-- **ingress-nginx** is used because the course uses it, but the upstream project was retired in March 2026. Migrating to the AWS Load Balancer Controller or the Gateway API is the long-term path.
-- **Single NAT gateway** and local Terraform state keep cost and setup low, but are not HA or team-ready.
-- **No authentication** on the app. It is a single-tenant demo.
-- **GitOps bot commit**: if `main` has branch protection that blocks direct pushes, allow `github-actions[bot]` to bypass it or switch the job to open a PR.
+Built as part of the **DevSecOps Final Capstone**. All infrastructure configurations, application source code, and deployment manifests are structured following cloud-native best practices.

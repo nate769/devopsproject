@@ -19,6 +19,7 @@ kubeconfig*
 !*.tfvars.example
 .terraform.lock.hcl.bak
 crash.log
+*tfplan
 
 # Editors / OS
 .idea/
