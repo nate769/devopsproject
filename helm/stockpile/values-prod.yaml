@@ -3,12 +3,12 @@
 backend:
   image:
     repository: ghcr.io/shaikh-suja-rahaman/stockpile-backend
-    tag: de1f180d25eaa639b7cd2bd3731b32c489f5bff5
+    tag: fa7deb91ea7725a3595757559c22b3922e8c5b8c
   replicas: 2
 frontend:
   image:
     repository: ghcr.io/shaikh-suja-rahaman/stockpile-frontend
-    tag: de1f180d25eaa639b7cd2bd3731b32c489f5bff5
+    tag: fa7deb91ea7725a3595757559c22b3922e8c5b8c
   replicas: 2
 postgres:
   storageClass: gp3
