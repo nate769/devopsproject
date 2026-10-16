@@ -1,0 +1,8 @@
+# Copy to terraform.tfvars and adjust. terraform.tfvars is git-ignored.
+# NEVER put AWS access keys here — use `aws configure` / environment variables instead.
+aws_region          = "ap-south-1"
+project             = "stockpile"
+environment         = "dev"
+cluster_version     = "1.34"
+node_instance_types = ["t3.large"]
+node_desired_size   = 2
